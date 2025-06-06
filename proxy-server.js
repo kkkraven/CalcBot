@@ -9,11 +9,10 @@ if (!API_KEY) {
 const app = express();
 app.use(express.json());
 
-const API_BASE = 'https://generativelanguage.googleapis.com';
+const API_BASE = import.meta.env?.VITE_API_BASE_URL || 'https://generativelanguage.googleapis.com';
 
 app.all('/api-proxy/*', async (req, res) => {
-  const targetPath = req.originalUrl.replace('/api-proxy', '');
-  const url = `${API_BASE}${targetPath}?key=${API_KEY}`;
+  const url = `${API_BASE}/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`;
 
   try {
     const response = await fetch(url, {

@@ -3,10 +3,8 @@
 import { FormData, ProductType, FinishType } from '../types';
 import { KNOWLEDGE_BASE_STRUCTURE_PROMPT, PRICING_RULES_PROMPT, PRODUCT_TYPES, BOX_TYPES, MATERIALS, PRINT_TYPES, FINISH_TYPES, HANDLE_TYPES, HANDLE_ATTACHMENTS } from '../constants';
 
-// Changed from absolute URL to a relative path.
-// This assumes the hosting environment will proxy requests from /api-proxy/... 
-// to the actual backend proxy service.
-const PROXY_URL_BASE = '/api-proxy/v1beta/models';
+// All requests should go directly to the base URL provided at build time.
+// import.meta.env.VITE_API_BASE_URL is injected by Vite.
 
 interface GeminiSDKConfig {
   responseMimeType?: string;
@@ -29,11 +27,11 @@ interface GeminiRequestBody {
 }
 
 async function makeGeminiRequest(
-  modelName: string,
+  _modelName: string,
   contents: any, // This is the 'contents' property for the SDK/API
   config?: GeminiSDKConfig 
 ): Promise<{ text: string }> {
-  const fullProxyUrl = `${PROXY_URL_BASE}/${modelName}:generateContent`;
+  const requestUrl = `${import.meta.env.VITE_API_BASE_URL}/v1beta/models/gemini-pro:generateContent`;
 
   const requestBody: GeminiRequestBody = { contents };
 
@@ -54,7 +52,7 @@ async function makeGeminiRequest(
   }
 
   try {
-    const httpResponse = await fetch(fullProxyUrl, {
+    const httpResponse = await fetch(requestUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
