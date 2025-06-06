@@ -13,11 +13,8 @@ used to communicate with Google Gemini.
 3. Start the proxy server in another terminal:
     `npm run proxy`
 4. Run the app for development:
-    `npm run dev`
-
    `npm run dev`
 
-codex/add-license-file-and-reference-in-readme
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
@@ -26,4 +23,3 @@ This project is licensed under the [MIT License](LICENSE).
 1. Build the static files: `npm run build`
 2. Serve the contents of `dist/` with any web server **and** run the proxy
    (`npm run proxy`) so that requests to `/api-proxy/` are forwarded to Gemini.
- main
