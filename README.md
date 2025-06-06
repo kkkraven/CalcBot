@@ -9,10 +9,12 @@ used to communicate with Google Gemini.
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` environment variable (or create `.env.local` with this variable).
+2. Copy `.env.example` to `.env.local` and set the `GEMINI_API_KEY` to your Gemini API key.
 3. Start the proxy server in another terminal:
-   `npm run proxy`
+    `npm run proxy`
 4. Run the app for development:
+    `npm run dev`
+
    `npm run dev`
 
 codex/add-license-file-and-reference-in-readme
