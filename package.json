@@ -17,6 +17,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/react": "^18.2.74",
+    "@types/react-dom": "^18.2.17",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
   }

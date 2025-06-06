@@ -7,7 +7,7 @@ interface ChatMessageProps {
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
-  const { text, sender, timestamp } = message;
+  const { text, sender } = message;
 
   const isUser = sender === 'user';
   const isBot = sender === 'bot';

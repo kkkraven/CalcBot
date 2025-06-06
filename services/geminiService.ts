@@ -1,6 +1,6 @@
 
 // Removed import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { FormData, ProductType, BoxType, Material, PrintType, FinishType, HandleType, HandleAttachment } from '../types';
+import { FormData, ProductType, FinishType } from '../types';
 import { KNOWLEDGE_BASE_STRUCTURE_PROMPT, PRICING_RULES_PROMPT, PRODUCT_TYPES, BOX_TYPES, MATERIALS, PRINT_TYPES, FINISH_TYPES, HANDLE_TYPES, HANDLE_ATTACHMENTS } from '../constants';
 
 // Changed from absolute URL to a relative path.

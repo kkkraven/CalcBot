@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatWindow } from './components/ChatWindow';
-import { LoadingSpinner } from './components/LoadingSpinner';
 import { ErrorMessage as ChatErrorMessage } from './components/ErrorMessage';
 import { CalculatorIcon } from './components/icons/CalculatorIcon';
-import type { FormData, PackagingCostResponse, ChatMessage, AppStep } from './types';
+import type { FormData, ChatMessage, AppStep } from './types';
 import { ProductType }  from './types';
 import { estimatePackagingCost, parseOrderFromStringWithGemini, parsePriceCorrectionFeedback } from './services/geminiService';
 
