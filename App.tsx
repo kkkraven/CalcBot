@@ -15,10 +15,10 @@ import {
   parseOrderFromStringWithGemini, 
   parsePriceCorrectionFeedback,
   estimatePackagingCostWithKnowledgeBase,
-  parseOrderFromStringWithGeminiOptimized,
+  parseOrderFromStringWithOpenRouter,
   saveOrderToKnowledgeBase,
   getTokenUsageStats
-} from './services/geminiService';
+} from './services/openRouterService';
 import { knowledgeBase } from './services/knowledgeBase';
 import { logger } from './services/monitoringService';
 
@@ -172,7 +172,7 @@ ${stats.recentOrders.slice(0, 3).map(order =>
       
       try {
         // Используем оптимизированную функцию
-        const parsedDataArray = await parseOrderFromStringWithGeminiOptimized(userInput);
+        const parsedDataArray = await parseOrderFromStringWithOpenRouter(userInput);
         setChatMessages(prev => prev.filter(m => !m.isLoading));
 
         if (!parsedDataArray || parsedDataArray.length === 0 || parsedDataArray.some(data => Object.keys(data).length === 0 || !data.productType)) {
@@ -194,10 +194,10 @@ ${stats.recentOrders.slice(0, 3).map(order =>
         let userErrorMessage = `Ошибка при разборе запроса. Попробуйте еще раз.`;
         const errorMessageString = String(e?.message || e || '').toLowerCase();
 
-        if (errorMessageString.includes("неверный api ключ gemini")) {
-            userErrorMessage = "Произошла ошибка аутентификации с сервисом Gemini. Пожалуйста, убедитесь, что конфигурация API ключа корректна в окружении приложения. После проверки, попробуйте еще раз.";
+        if (errorMessageString.includes("неверный api ключ")) {
+            userErrorMessage = "Произошла ошибка аутентификации с сервисом OpenRouter. Пожалуйста, убедитесь, что конфигурация API ключа корректна в окружении приложения. После проверки, попробуйте еще раз.";
         } else if (errorMessageString.includes("502") || errorMessageString.includes("proxying failed") || errorMessageString.includes("readablestream")) {
-            userErrorMessage = "Произошла ошибка при связи с сервисом Gemini (возможно, через прокси-сервер или из-за сетевых настроек). Пожалуйста, проверьте ваше интернет-соединение и, если проблема повторяется, обратитесь за помощью. (Код: 502/Proxy)";
+            userErrorMessage = "Произошла ошибка при связи с сервисом OpenRouter (возможно, через прокси-сервер или из-за сетевых настроек). Пожалуйста, проверьте ваше интернет-соединение и, если проблема повторяется, обратитесь за помощью. (Код: 502/Proxy)";
         } else if (e?.message) {
              userErrorMessage = `Ошибка при разборе запроса: ${e.message}. Попробуйте еще раз.`;
         }
@@ -346,7 +346,7 @@ ${note}`;
                 setAppStep('parsing_description');
                 setFormData([]); 
                 setLastCalculatedFormData(null); 
-                const parsedDataArray = await parseOrderFromStringWithGeminiOptimized(userInput);
+                const parsedDataArray = await parseOrderFromStringWithOpenRouter(userInput);
                 setChatMessages(prev => prev.filter(m => m.text === "Проверяю ваше сообщение..." || m.text === "Хорошо, начинаем новый расчет. Анализирую ваш запрос...").filter(m => !m.isLoading));
 
                 if (!parsedDataArray || parsedDataArray.length === 0 || parsedDataArray.some(data => Object.keys(data).length === 0 || !data.productType)) {
@@ -365,10 +365,10 @@ ${note}`;
             setChatMessages(prev => prev.filter(m => !m.isLoading));
             let feedbackErrorMessage = `Ошибка при обработке вашего сообщения. Начинаем новый расчет. Опишите ваш заказ.`;
             const errorMessageString = String(e?.message || e || '').toLowerCase();
-            if (errorMessageString.includes("неверный api ключ gemini")) {
-                 feedbackErrorMessage = `Ошибка аутентификации с Gemini: ${e.message}. Убедитесь в корректности конфигурации API ключа в окружении и попробуйте снова.`;
+            if (errorMessageString.includes("неверный api ключ")) {
+                 feedbackErrorMessage = `Ошибка аутентификации с OpenRouter: ${e.message}. Убедитесь в корректности конфигурации API ключа в окружении и попробуйте снова.`;
             } else if (errorMessageString.includes("502") || errorMessageString.includes("proxying failed") || errorMessageString.includes("readablestream")) {
-                 feedbackErrorMessage = `Ошибка при связи с сервисом Gemini (возможно, через прокси-сервер) при обработке отзыва. Ошибка: ${e.message}`;
+                 feedbackErrorMessage = `Ошибка при связи с сервисом OpenRouter (возможно, через прокси-сервер) при обработке отзыва. Ошибка: ${e.message}`;
             } else if (e?.message) {
                 feedbackErrorMessage = `Ошибка при обработке вашего сообщения: ${e.message}. Начинаем новый расчет. Опишите ваш заказ.`;
             }
