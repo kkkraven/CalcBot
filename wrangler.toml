@@ -4,13 +4,13 @@ compatibility_date = "2024-01-01"
 
 # Переменные окружения (устанавливаются через Cloudflare Dashboard)
 [vars]
-CLIENT_API_KEY = "your-client-api-key-here"
+CLIENT_API_KEY = "384e8b655b4c9bc468a411b65ce5151291a1d720823c7445af8572e7d009372b"
 
 # KV namespace для rate limiting и мониторинга
 [[kv_namespaces]]
 binding = "KV"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
+id = "50c335f25e5741a18aeb76ed45bbb156"
+preview_id = "dd5498becfc04c80ac7b83e33a13fccf"
 
 # Секретные переменные (устанавливаются через wrangler secret)
 # wrangler secret put GEMINI_API_KEY

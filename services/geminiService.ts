@@ -7,9 +7,7 @@ import { knowledgeBase } from './knowledgeBase';
 // Конфигурация для защищенного API
 const API_CONFIG = {
   // URL вашего Cloudflare Worker
-  baseUrl: process.env.NODE_ENV === 'production' 
-    ? 'https://api.yourdomain.com' 
-    : 'https://packaging-calculator-api.your-subdomain.workers.dev',
+  baseUrl: process.env.REACT_APP_API_BASE_URL || 'https://packaging-calculator-api.your-subdomain.workers.dev',
   
   // API ключ клиента (публичный, но ограниченный)
   clientApiKey: process.env.REACT_APP_CLIENT_API_KEY || 'your-client-api-key',
@@ -620,7 +618,7 @@ interface TokenUsage {
 class TokenMonitor {
   private usage: TokenUsage[] = [];
   private monthlyLimit = 1000000; // 1M токенов в месяц
-  private costPer1KTokens = 0.02; // Примерная стоимость
+  private costPer1KTokens = 0.001; // Примерная стоимость OpenRouter
 
   addUsage(inputTokens: number, outputTokens: number): void {
     const totalTokens = inputTokens + outputTokens;
@@ -671,14 +669,14 @@ class TokenMonitor {
 
 const tokenMonitor = new TokenMonitor();
 
-// Конфигурация моделей для оптимизации стоимости
+// Конфигурация моделей для оптимизации стоимости (OpenRouter)
 const MODEL_CONFIG = {
   // Дешевые модели для простых задач
-  extraction: "gemini-1.5-flash",        // ~$0.002/1K токенов
-  priceCorrection: "gemini-1.5-flash",   // ~$0.002/1K токенов
+  extraction: "anthropic/claude-3-haiku",        // ~$0.00025/1K токенов
+  priceCorrection: "anthropic/claude-3-haiku",   // ~$0.00025/1K токенов
   
   // Дорогие модели для критически важных задач
-  costEstimation: "gemini-2.5-flash-preview-04-17", // ~$0.01-0.05/1K токенов
+  costEstimation: "anthropic/claude-3-5-sonnet", // ~$0.003/1K токенов
 };
 
 // Функция для получения статистики использования

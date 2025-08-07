@@ -44,30 +44,61 @@ export default {
     });
 
     try {
-      // Проксируем запрос к Gemini API
+      // Проксируем запрос к OpenRouter API
       const url = new URL(request.url);
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models${url.pathname.replace('/api-proxy', '')}`;
+      const openRouterUrl = `https://openrouter.ai/api/v1/chat/completions`;
       
-      const geminiRequest = new Request(geminiUrl, {
-        method: request.method,
+      // Преобразуем Gemini формат в OpenRouter формат
+      const requestBody = await request.json();
+      const openRouterBody = {
+        model: requestBody.contents?.[0]?.parts?.[0]?.text?.includes('gemini-1.5') ? 'anthropic/claude-3-haiku' : 'anthropic/claude-3-5-sonnet',
+        messages: [
+          {
+            role: 'user',
+            content: requestBody.contents?.[0]?.parts?.[0]?.text || ''
+          }
+        ],
+        temperature: requestBody.generationConfig?.temperature || 0.7,
+        max_tokens: 4000
+      };
+      
+      const openRouterRequest = new Request(openRouterUrl, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${env.GEMINI_API_KEY}`,
+          'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://packaging-calculator.com',
+          'X-Title': 'Packaging Calculator'
         },
-        body: request.method !== 'GET' ? await request.text() : undefined,
+        body: JSON.stringify(openRouterBody),
       });
 
-      const response = await fetch(geminiRequest);
+      const response = await fetch(openRouterRequest);
       const responseData = await response.json();
+
+      // Преобразуем OpenRouter ответ в Gemini формат
+      const geminiResponse = {
+        candidates: [{
+          content: {
+            parts: [{
+              text: responseData.choices?.[0]?.message?.content || ''
+            }]
+          }
+        }],
+        usage: {
+          promptTokenCount: responseData.usage?.prompt_tokens || 0,
+          candidatesTokenCount: responseData.usage?.completion_tokens || 0
+        }
+      };
 
       // Логируем использование токенов
       if (responseData.usage) {
         const tokenUsage = {
           timestamp: new Date().toISOString(),
           clientIP,
-          inputTokens: responseData.usage.promptTokenCount || 0,
-          outputTokens: responseData.usage.candidatesTokenCount || 0,
-          totalTokens: (responseData.usage.promptTokenCount || 0) + (responseData.usage.candidatesTokenCount || 0),
+          inputTokens: responseData.usage.prompt_tokens || 0,
+          outputTokens: responseData.usage.completion_tokens || 0,
+          totalTokens: (responseData.usage.prompt_tokens || 0) + (responseData.usage.completion_tokens || 0),
         };
 
         // Сохраняем в KV для мониторинга
@@ -83,7 +114,7 @@ export default {
         });
       }
 
-      return new Response(JSON.stringify(responseData), {
+      return new Response(JSON.stringify(geminiResponse), {
         status: response.status,
         headers: {
           ...corsHeaders,
