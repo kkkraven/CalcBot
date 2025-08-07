@@ -66,15 +66,15 @@ async function makeSecureGeminiRequest(
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= API_CONFIG.retryAttempts; attempt++) {
-    try {
+  try {
       const httpResponse = await fetch(fullApiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
           'X-API-Key': API_CONFIG.clientApiKey,
-        },
-        body: JSON.stringify(requestBody),
-      });
+      },
+      body: JSON.stringify(requestBody),
+    });
 
       if (httpResponse.status === 401) {
         throw new Error('Неверный API ключ клиента. Проверьте конфигурацию.');
@@ -89,44 +89,44 @@ async function makeSecureGeminiRequest(
         continue;
       }
 
-      if (!httpResponse.ok) {
+    if (!httpResponse.ok) {
         let errorBodyText = "No error details from API.";
-        try {
-          errorBodyText = await httpResponse.text();
-        } catch (e) {
-          // ignore if reading body fails
-        }
+      try {
+        errorBodyText = await httpResponse.text();
+      } catch (e) {
+        // ignore if reading body fails
+      }
         console.error(`API request failed: ${httpResponse.status} ${httpResponse.statusText}`, errorBodyText);
         throw new Error(`Запрос к API завершился с ошибкой ${httpResponse.status}. Детали: ${errorBodyText}`);
-      }
+    }
 
-      const responseData = await httpResponse.json();
+    const responseData = await httpResponse.json();
       
       // Мониторинг токенов
       const inputTokens = responseData.usage?.promptTokenCount || 0;
       const outputTokens = responseData.usage?.candidatesTokenCount || 0;
       tokenMonitor.addUsage(inputTokens, outputTokens);
-      
-      let extractedText = "";
-      if (responseData.candidates && responseData.candidates.length > 0 &&
-          responseData.candidates[0].content && responseData.candidates[0].content.parts &&
-          responseData.candidates[0].content.parts.length > 0 && responseData.candidates[0].content.parts[0].text !== undefined) {
-        extractedText = responseData.candidates[0].content.parts[0].text;
-      } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
-        const blockReason = responseData.promptFeedback.blockReason;
-        const blockMessage = responseData.promptFeedback.blockReasonMessage || "";
+    
+    let extractedText = "";
+    if (responseData.candidates && responseData.candidates.length > 0 &&
+        responseData.candidates[0].content && responseData.candidates[0].content.parts &&
+        responseData.candidates[0].content.parts.length > 0 && responseData.candidates[0].content.parts[0].text !== undefined) {
+      extractedText = responseData.candidates[0].content.parts[0].text;
+    } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
+      const blockReason = responseData.promptFeedback.blockReason;
+      const blockMessage = responseData.promptFeedback.blockReasonMessage || "";
         console.warn(`Request blocked by API: ${blockReason} - ${blockMessage}`, responseData);
-        throw new Error(`Запрос был заблокирован API: ${blockReason} ${blockMessage}`);
+      throw new Error(`Запрос был заблокирован API: ${blockReason} ${blockMessage}`);
       } else if (responseData.error) {
         console.error("Error from API:", responseData.error);
         throw new Error(`Ошибка от API: ${responseData.error.message || responseData.error.status || JSON.stringify(responseData.error)}`);
-      } else {
+    } else {
         console.warn("API response format not as expected or text is missing:", responseData);
-      }
+    }
       
-      return { text: extractedText };
+    return { text: extractedText };
 
-    } catch (error: any) {
+  } catch (error: any) {
       lastError = error;
       console.error(`Attempt ${attempt} failed:`, error);
       
