@@ -50,8 +50,19 @@ export default {
       
       // Преобразуем Gemini формат в OpenRouter формат
       const requestBody = await request.json();
+      
+      // Определяем модель на основе URL
+      const modelPath = url.pathname;
+      let model = 'anthropic/claude-3-haiku'; // по умолчанию
+      
+      if (modelPath.includes('claude-3-5-sonnet')) {
+        model = 'anthropic/claude-3-5-sonnet';
+      } else if (modelPath.includes('claude-3-haiku')) {
+        model = 'anthropic/claude-3-haiku';
+      }
+      
       const openRouterBody = {
-        model: requestBody.contents?.[0]?.parts?.[0]?.text?.includes('gemini-1.5') ? 'anthropic/claude-3-haiku' : 'anthropic/claude-3-5-sonnet',
+        model: model,
         messages: [
           {
             role: 'user',
