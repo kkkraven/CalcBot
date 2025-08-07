@@ -1,22 +1,30 @@
 import React from 'react';
+import { X, AlertCircle } from 'lucide-react';
 
 interface ErrorMessageProps {
   message: string;
   onClose?: () => void;
 }
 
-export const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onClose }) => (
-  <div className="my-2 p-3 bg-red-200 border border-red-400 text-red-800 rounded-md shadow-sm relative text-sm">
-    <strong className="font-semibold">Ошибка!</strong>
-    <span className="block sm:inline ml-1">{message}</span>
-    {onClose && (
-      <button 
-        onClick={onClose} 
-        className="absolute top-0 bottom-0 right-0 px-3 py-2 text-red-600 hover:text-red-800"
-        aria-label="Закрыть сообщение об ошибке"
-      >
-        <svg className="w-4 h-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 8.586L2.929 1.515 1.515 2.929 8.586 10l-7.071 7.071 1.414 1.414L10 11.414l7.071 7.071 1.414-1.414L11.414 10l7.071-7.071-1.414-1.414L10 8.586z"/></svg>
-      </button>
-    )}
-  </div>
-);
+export const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onClose }) => {
+  return (
+    <div className="bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-xl p-3 md:p-4 shadow-lg animate-in slide-in-from-bottom duration-300">
+      <div className="flex items-start space-x-3">
+        <div className="flex-shrink-0 mt-0.5">
+          <AlertCircle className="w-5 h-5 text-red-400" />
+        </div>
+        <div className="flex-grow">
+          <p className="text-red-200 text-sm md:text-base leading-relaxed">{message}</p>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="flex-shrink-0 p-1 text-red-300 hover:text-red-200 transition-colors duration-200 hover:bg-red-500/20 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};

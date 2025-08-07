@@ -2,11 +2,23 @@
 // Removed import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { FormData, ProductType, BoxType, Material, PrintType, FinishType, HandleType, HandleAttachment } from '../types';
 import { KNOWLEDGE_BASE_STRUCTURE_PROMPT, PRICING_RULES_PROMPT, PRODUCT_TYPES, BOX_TYPES, MATERIALS, PRINT_TYPES, FINISH_TYPES, HANDLE_TYPES, HANDLE_ATTACHMENTS } from '../constants';
+import { knowledgeBase } from './knowledgeBase';
 
-// Changed from absolute URL to a relative path.
-// This assumes the hosting environment will proxy requests from /api-proxy/... 
-// to the actual backend proxy service.
-const PROXY_URL_BASE = '/api-proxy/v1beta/models';
+// Конфигурация для защищенного API
+const API_CONFIG = {
+  // URL вашего Cloudflare Worker
+  baseUrl: process.env.NODE_ENV === 'production' 
+    ? 'https://api.yourdomain.com' 
+    : 'https://packaging-calculator-api.your-subdomain.workers.dev',
+  
+  // API ключ клиента (публичный, но ограниченный)
+  clientApiKey: process.env.REACT_APP_CLIENT_API_KEY || 'your-client-api-key',
+  
+  // Настройки rate limiting
+  maxRequestsPerMinute: 100,
+  retryAttempts: 3,
+  retryDelay: 1000,
+};
 
 interface GeminiSDKConfig {
   responseMimeType?: string;
@@ -28,12 +40,13 @@ interface GeminiRequestBody {
   // safetySettings?: any[];
 }
 
-async function makeGeminiRequest(
+// Обновленная функция для запросов с аутентификацией
+async function makeSecureGeminiRequest(
   modelName: string,
-  contents: any, // This is the 'contents' property for the SDK/API
+  contents: any,
   config?: GeminiSDKConfig 
 ): Promise<{ text: string }> {
-  const fullProxyUrl = `${PROXY_URL_BASE}/${modelName}:generateContent`;
+  const fullApiUrl = `${API_CONFIG.baseUrl}/v1beta/models/${modelName}:generateContent`;
 
   const requestBody: GeminiRequestBody = { contents };
 
@@ -50,56 +63,82 @@ async function makeGeminiRequest(
     if (config.systemInstruction) {
         requestBody.systemInstruction = config.systemInstruction;
     }
-    // Map other config properties to requestBody.generationConfig, requestBody.tools, requestBody.safetySettings as needed
   }
 
-  try {
-    const httpResponse = await fetch(fullProxyUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+  let lastError: Error | null = null;
 
-    if (!httpResponse.ok) {
-      let errorBodyText = "No error details from proxy.";
-      try {
-        errorBodyText = await httpResponse.text();
-      } catch (e) {
-        // ignore if reading body fails
+  for (let attempt = 1; attempt <= API_CONFIG.retryAttempts; attempt++) {
+    try {
+      const httpResponse = await fetch(fullApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_CONFIG.clientApiKey,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (httpResponse.status === 401) {
+        throw new Error('Неверный API ключ клиента. Проверьте конфигурацию.');
       }
-      console.error(`Proxy request failed: ${httpResponse.status} ${httpResponse.statusText}`, errorBodyText);
-      throw new Error(`Запрос к прокси-сервису завершился с ошибкой ${httpResponse.status}. Детали: ${errorBodyText}`);
-    }
 
-    const responseData = await httpResponse.json();
-    
-    let extractedText = "";
-    if (responseData.candidates && responseData.candidates.length > 0 &&
-        responseData.candidates[0].content && responseData.candidates[0].content.parts &&
-        responseData.candidates[0].content.parts.length > 0 && responseData.candidates[0].content.parts[0].text !== undefined) {
-      extractedText = responseData.candidates[0].content.parts[0].text;
-    } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
-      const blockReason = responseData.promptFeedback.blockReason;
-      const blockMessage = responseData.promptFeedback.blockReasonMessage || "";
-      console.warn(`Request blocked by API via proxy: ${blockReason} - ${blockMessage}`, responseData);
-      throw new Error(`Запрос был заблокирован API: ${blockReason} ${blockMessage}`);
-    } else if (responseData.error) { // Handle cases where the proxy returns an error structure
-        console.error("Error from proxy/Gemini:", responseData.error);
-        throw new Error(`Ошибка от сервиса Gemini через прокси: ${responseData.error.message || responseData.error.status || JSON.stringify(responseData.error)}`);
-    } else {
-      console.warn("Proxy response format not as expected or text is missing:", responseData);
-      // Fallback or throw error if text is crucial and not found
-      // For now, let's assume if no error, but no text, it's an empty valid response
-    }
-    return { text: extractedText };
+      if (httpResponse.status === 429) {
+        const retryAfter = httpResponse.headers.get('Retry-After');
+        const delay = retryAfter ? parseInt(retryAfter) * 1000 : API_CONFIG.retryDelay * attempt;
+        
+        console.warn(`Rate limit exceeded. Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
 
-  } catch (error: any) {
-    console.error("Ошибка при выполнении запроса через прокси:", error);
-    // Re-throw with a generic message or specific error if identifiable
-    throw new Error(error.message || 'Не удалось связаться с сервисом AI через прокси.');
+      if (!httpResponse.ok) {
+        let errorBodyText = "No error details from API.";
+        try {
+          errorBodyText = await httpResponse.text();
+        } catch (e) {
+          // ignore if reading body fails
+        }
+        console.error(`API request failed: ${httpResponse.status} ${httpResponse.statusText}`, errorBodyText);
+        throw new Error(`Запрос к API завершился с ошибкой ${httpResponse.status}. Детали: ${errorBodyText}`);
+      }
+
+      const responseData = await httpResponse.json();
+      
+      // Мониторинг токенов
+      const inputTokens = responseData.usage?.promptTokenCount || 0;
+      const outputTokens = responseData.usage?.candidatesTokenCount || 0;
+      tokenMonitor.addUsage(inputTokens, outputTokens);
+      
+      let extractedText = "";
+      if (responseData.candidates && responseData.candidates.length > 0 &&
+          responseData.candidates[0].content && responseData.candidates[0].content.parts &&
+          responseData.candidates[0].content.parts.length > 0 && responseData.candidates[0].content.parts[0].text !== undefined) {
+        extractedText = responseData.candidates[0].content.parts[0].text;
+      } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
+        const blockReason = responseData.promptFeedback.blockReason;
+        const blockMessage = responseData.promptFeedback.blockReasonMessage || "";
+        console.warn(`Request blocked by API: ${blockReason} - ${blockMessage}`, responseData);
+        throw new Error(`Запрос был заблокирован API: ${blockReason} ${blockMessage}`);
+      } else if (responseData.error) {
+        console.error("Error from API:", responseData.error);
+        throw new Error(`Ошибка от API: ${responseData.error.message || responseData.error.status || JSON.stringify(responseData.error)}`);
+      } else {
+        console.warn("API response format not as expected or text is missing:", responseData);
+      }
+      
+      return { text: extractedText };
+
+    } catch (error: any) {
+      lastError = error;
+      console.error(`Attempt ${attempt} failed:`, error);
+      
+      if (attempt < API_CONFIG.retryAttempts) {
+        await new Promise(resolve => setTimeout(resolve, API_CONFIG.retryDelay * attempt));
+      }
+    }
   }
+
+  throw lastError || new Error('Не удалось связаться с API после нескольких попыток.');
 }
 
 
@@ -230,172 +269,38 @@ const mapResponseToFormDataArray = (responseText: string): Partial<FormData>[] =
 };
 
 
-export async function parseOrderFromStringWithGemini(userText: string): Promise<Partial<FormData>[]> {
+export async function parseOrderFromStringWithGeminiOptimized(userText: string): Promise<Partial<FormData>[]> {
   const extractionPrompt = `
-Твоя задача - извлечь параметры заказа упаковки из текста пользователя и вернуть их СТРОГО в формате JSON-МАССИВА (даже если вариант только один, он должен быть элементом массива).
-Если пользователь указывает несколько вариантов (например, разные тиражи "500/1000 шт"), КАЖДЫЙ вариант должен быть ОТДЕЛЬНЫМ ОБЪЕКТОМ в JSON-массиве.
-
-Вот целевая структура JSON для КАЖДОГО ОБЪЕКТА в массиве (ключи должны быть именно такими, значения - строки или числа):
-interface FormData {
-  productType?: string; // "${PRODUCT_TYPES.join('", "')}"
-  specificBoxType?: string; // "${BOX_TYPES.join('", "')}" (только если productType = "Коробка")
-  material?: string; // "${MATERIALS.join('", "')}" или конкретное название если "Другой материал" / "Дизайнерская бумага"
-  specificMaterialName?: string; // если material = "Дизайнерская/спецбумага" или "Другой материал" или уточнено для гофрокартона, например, "Гофрокартон Т23Б"
-  materialDensity?: string | number; // Например: "250", "280 гр/м2", 250
-  width?: string | number; // Размеры в мм. Если указаны в см, конвертируй в мм. Например: "300", "30см" -> 300
-  height?: string | number; // Например: "400", "27см" -> 270
-  depth?: string | number; // Например: "100", "18см" -> 180
-  quantity?: string | number; // Например: "1000". Если "500/1000", то для первого объекта quantity: 500, для второго quantity: 1000
-  printColorsOuter?: string; // Например: "4+0 CMYK", "белый логотип", "Без печати", "Полноцветная с двух сторон"
-  printColorsInner?: string; // Например: "Без печати", "1+0"
-  printType?: string; // "${PRINT_TYPES.join('", "')}" Например: "Офсетная", "обычная печать" (интерпретируй как Офсетная если неясно)
-  finishes?: string[] | string; // Массив строк или строка через запятую. Например: ["Матовая ламинация", "Тиснение золотом"], или "матовая ламинация, тиснение". "${FINISH_TYPES.join('", "')}"
-  handleType?: string; // "${HANDLE_TYPES.join('", "')}" (только если productType = "Пакет бумажный")
-  handleAttachment?: string; // "${HANDLE_ATTACHMENTS.join('", "')}" (только если productType = "Пакет бумажный")
-  fittings?: string; // Например: "Люверсы", "Магниты", "Ручки не нужны" (если явно указано)
-  additionalInfo?: string; // Любая другая информация, например, "внутри пакет белый", "logo нанесение белое: лицевая 10х7,5см., оборотная - 14х0,5см."
+Извлеки параметры заказа упаковки в JSON-массив. Структура:
+{
+  "productType": "Пакет бумажный|Коробка|Тишью бумага|Бирка",
+  "specificBoxType": "Самосборная|Складная|Подарочная" (только для коробок),
+  "material": "Мелованная бумага|Гофрокартон|Крафт|Картон|Тишью",
+  "materialDensity": "250гр|280г/м2",
+  "width": 300, "height": 400, "depth": 100, "quantity": 1000,
+  "printColorsOuter": "4+0 CMYK|1+0|Без печати",
+  "printType": "Офсетная печать|Флексография",
+  "finishes": ["Матовая ламинация|Глянцевая|Тиснение"],
+  "handleType": "Лента репсовая|Вырубная|Шнурок" (для пакетов),
+  "handleAttachment": "Вклеенные|Люверсы" (для пакетов),
+  "fittings": "Люверсы|Магниты",
+  "additionalInfo": "дополнительная информация"
 }
 
-Старайся максимально полно извлечь все упомянутые детали для каждого варианта. Если какой-то параметр отсутствует в тексте, не включай его в JSON.
-Если есть сомнения в интерпретации, отдавай предпочтение более общему варианту или включай исходную формулировку.
-Размеры (width, height, depth) должны быть в мм. Если пользователь указал в см (например, "ширина 36см"), конвертируй в мм (360).
+Размеры в мм. Если см - конвертируй (30см=300мм). Множественные варианты - отдельные объекты в массиве.
 
-Примеры пользовательского текста и ОЖИДАЕМОГО JSON-МАССИВА:
-
-ТЕКСТ 1: "Пакет,медная бумага , 280 грамм. Внутри пакет белый. Логотип-обычная печать. Ламинация сенсорная пленка Диаметр отверстий для ручек 6 мм. Ручки сами не нужны. Темно-Серый. Ширина 36*высота 27х глубина 18см 1000штук"
-ОЖИДАЕМЫЙ JSON 1:
+Пример: "Пакет, медная бумага 250гр, зеркальный, 25х30х80мм, 500/1000шт" →
 [
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "280 грамм",
-    "additionalInfo": "Внутри пакет белый. Логотип-обычная печать. Диаметр отверстий для ручек 6 мм. Темно-Серый.",
-    "printType": "Офсетная печать", 
-    "finishes": ["Сенсорная ламинация"],
-    "fittings": "Ручки сами не нужны",
-    "width": 360,
-    "height": 270,
-    "depth": 180,
-    "quantity": 1000
-  }
+  {"productType": "Пакет бумажный", "material": "Мелованная бумага", "materialDensity": "250гр", "finishes": ["Глянцевая ламинация"], "width": 250, "height": 300, "depth": 80, "quantity": 500},
+  {"productType": "Пакет бумажный", "material": "Мелованная бумага", "materialDensity": "250гр", "finishes": ["Глянцевая ламинация"], "width": 250, "height": 300, "depth": 80, "quantity": 1000}
 ]
 
-ТЕКСТ 2: "Пакет, медная бумага. Плотность 250 грамм. Зеркальный, с вырубной ручкой,Размер 25х30х80мм, logo нанесение белое: лицевая 10х7,5см., оборотная - 14х0,5см. Количество 500/1000"
-ОЖИДАЕМЫЙ JSON 2:
-[
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "250 грамм",
-    "finishes": ["Глянцевая ламинация"], 
-    "handleType": "Вырубная ручка",
-    "width": 250, 
-    "height": 300,
-    "depth": 80, 
-    "additionalInfo": "logo нанесение белое: лицевая 10х7,5см., оборотная - 14х0,5см.",
-    "quantity": 500
-  },
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "250 грамм",
-    "finishes": ["Глянцевая ламинация"], 
-    "handleType": "Вырубная ручка",
-    "width": 250, 
-    "height": 300,
-    "depth": 80, 
-    "additionalInfo": "logo нанесение белое: лицевая 10х7,5см., оборотная - 14х0,5см.",
-    "quantity": 1000
-  }
-]
+Текст: "${userText}"
+JSON:`;
 
-ТЕКСТ 3: "Привет . Пакет , медная бумага . Зеркальный ,плотность 250гр, (волнистые) репсовые ручки белые (А5 002) , вклеенные в ребро, размер ~30см , logo нанесение белое: лицевая 10х7,5см., оборотная - 14х0,5см. Размер 230*330*90мм. Количество 500/1000"
-ОЖИДАЕМЫЙ JSON 3:
-[
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "250гр",
-    "finishes": ["Глянцевая ламинация"],
-    "handleType": "Лента репсовая",
-    "additionalInfo": "ручки белые (А5 002), logo нанесение белое: лицевая 10х7,5см., оборотная - 14х0,5см. размер ~30см",
-    "handleAttachment": "Вклеенные",
-    "width": 230,
-    "height": 330,
-    "depth": 90,
-    "quantity": 500
-  },
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "250гр",
-    "finishes": ["Глянцевая ламинация"],
-    "handleType": "Лента репсовая",
-    "additionalInfo": "ручки белые (А5 002), logo нанесение белое: лицевая 10х7,5см., оборотная - 14х0,5см. размер ~30см",
-    "handleAttachment": "Вклеенные",
-    "width": 230,
-    "height": 330,
-    "depth": 90,
-    "quantity": 1000
-  }
-]
-
-ТЕКСТ 4: "Привет. Пакет Материал: медная бумага . Плотность: от 250 гр/м2. Покрытие/ламинация: мутная пленка . Способ нанесения logo посчитать три варианта: 1) трафаретная печать /2) uv-лакирование/3) выпуклый эффект . Печать logo с двух сторон. Вид ручек: шнурок. Способ крепления: на куриный глаз .Цвет пакета: как на фото (Pantone C нет). Внутри неокрашен. Цвет шнурка: как на фото. Размер Пакет: вертикальный 230 мм х 180 мм х 100 мм. Длина ручек: как на фото. Количество 3000"
-ОЖИДАЕМЫЙ JSON 4:
-[
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "от 250 гр/м2",
-    "finishes": ["Матовая ламинация"],
-    "printType": "Трафаретная печать",
-    "additionalInfo": "Вариант 1: трафаретная печать. Печать logo с двух сторон. Цвет пакета: как на фото (Pantone C нет). Внутри неокрашен. Цвет шнурка: как на фото. Длина ручек: как на фото.",
-    "handleType": "Шнурок",
-    "handleAttachment": "Люверсы",
-    "width": 180, 
-    "height": 230, 
-    "depth": 100,
-    "quantity": 3000
-  },
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "от 250 гр/м2",
-    "finishes": ["Выборочный УФ-лак"], 
-    "printType": "Офсетная печать", 
-    "additionalInfo": "Вариант 2: uv-лакирование. Печать logo с двух сторон. Цвет пакета: как на фото (Pantone C нет). Внутри неокрашен. Цвет шнурка: как на фото. Длина ручек: как на фото.",
-    "handleType": "Шнурок",
-    "handleAttachment": "Люверсы",
-    "width": 180, 
-    "height": 230, 
-    "depth": 100,
-    "quantity": 3000
-  },
-  {
-    "productType": "Пакет бумажный",
-    "material": "Мелованная бумага",
-    "materialDensity": "от 250 гр/м2",
-    "finishes": ["Конгревное тиснение"], 
-    "printType": "Офсетная печать", 
-    "additionalInfo": "Вариант 3: выпуклый эффект. Печать logo с двух сторон. Цвет пакета: как на фото (Pantone C нет). Внутри неокрашен. Цвет шнурка: как на фото. Длина ручек: как на фото.",
-    "handleType": "Шнурок",
-    "handleAttachment": "Люверсы",
-    "width": 180, 
-    "height": 230, 
-    "depth": 100,
-    "quantity": 3000
-  }
-]
-
-Пользовательский текст для обработки:
-"${userText}"
-
-JSON результат (массив объектов):
-`;
-  
   try {
-    const response = await makeGeminiRequest(
-      "gemini-2.5-flash-preview-04-17",
+    const response = await makeSecureGeminiRequest(
+      MODEL_CONFIG.extraction, // Используем более дешевую модель
       extractionPrompt,
       {
         responseMimeType: "application/json",
@@ -409,8 +314,6 @@ JSON результат (массив объектов):
     return mapResponseToFormDataArray(response.text);
   } catch (error: any) {
     console.error("Ошибка при вызове Gemini API через прокси для разбора запроса:", error);
-    // Specific error messages are now handled more generically by makeGeminiRequest
-    // Re-throw the error for App.tsx to handle and display
     throw error;
   }
 }
@@ -485,8 +388,8 @@ JSON результат (массив объектов):
 `;
 
   try {
-    const response = await makeGeminiRequest(
-      "gemini-2.5-flash-preview-04-17",
+    const response = await makeSecureGeminiRequest(
+      MODEL_CONFIG.priceCorrection,
       prompt,
       {
         responseMimeType: "application/json",
@@ -604,8 +507,8 @@ export async function estimatePackagingCost(formData: FormData): Promise<string>
   const prompt = buildCostEstimationPrompt(formData);
   
   try {
-    const response = await makeGeminiRequest(
-      "gemini-2.5-flash-preview-04-17",
+    const response = await makeSecureGeminiRequest(
+      MODEL_CONFIG.costEstimation,
       prompt
     );
 
@@ -618,4 +521,167 @@ export async function estimatePackagingCost(formData: FormData): Promise<string>
     // Re-throw the error for App.tsx to handle and display
     throw error;
   }
+}
+
+function buildCostEstimationPromptWithKnowledgeBase(formData: FormData): string {
+  const {
+    productType,
+    specificBoxType,
+    material,
+    specificMaterialName,
+    materialDensity,
+    width,
+    height,
+    depth,
+    quantity,
+    printColorsOuter,
+    printColorsInner,
+    printType,
+    finishes,
+    handleType,
+    handleAttachment,
+    fittings,
+    additionalInfo,
+    parsedUserRequest
+  } = formData;
+
+  const userRequestDetails = `
+Заказ: ${productType}${specificBoxType ? ` (${specificBoxType})` : ''}, ${material}${specificMaterialName ? ` (${specificMaterialName})` : ''}, ${materialDensity || 'плотность не указана'}, ${width || '_'}x${height || '_'}x${depth || '_'}мм, ${quantity || '_'}шт, ${printColorsOuter || 'печать не указана'}, ${printType || 'тип печати не указан'}, ${formatFinishesForPrompt(finishes)}, ${fittings || 'фурнитура не указана'}. ${additionalInfo || ''}`;
+
+  // Получаем релевантные данные из базы знаний
+  const knowledgeBaseData = knowledgeBase.exportForPrompt(formData);
+
+  return `
+Рассчитай стоимость упаковки в Китае (¥). Используй правила: цена снижается с тиражом, спецматериалы дороже, сложная печать дороже, отделка добавляет стоимость.
+
+Ориентиры: Пакеты мелованные 200-250г: малые 1000шт ~3¥, 500шт ~4¥; средние 1000шт ~3.5¥, 500шт ~4.8¥; крупные 1000шт ~4.2¥, 500шт ~5.5¥. Крафт на 25-40% дешевле. Тиснение +0.6-1.8¥, люверсы +0.3-0.6¥. Коробки: малые 1000шт 4-7¥, средние 500шт 18-25¥.
+
+${knowledgeBaseData}
+
+Заказ: ${userRequestDetails}
+
+Ответ: "Примерная стоимость: [цена] ¥ за единицу. Общая сумма: [сумма] ¥. [примечание]"
+`;
+}
+
+export async function estimatePackagingCostWithKnowledgeBase(formData: FormData): Promise<string> {
+  const prompt = buildCostEstimationPromptWithKnowledgeBase(formData);
+  
+  try {
+    const response = await makeSecureGeminiRequest(
+      MODEL_CONFIG.costEstimation,
+      prompt
+    );
+
+    if (!response.text) {
+      throw new Error("Получен пустой ответ от Gemini API через прокси при расчете стоимости.");
+    }
+    return response.text;
+  } catch (error: any) {
+    console.error("Ошибка при вызове Gemini API через прокси для расчета стоимости:", error);
+    throw error;
+  }
+}
+
+// Функция для сохранения заказа в базу знаний
+export function saveOrderToKnowledgeBase(formData: FormData, estimatedPrice: number): string {
+  const orderData = {
+    productType: formData.productType || '',
+    specificType: formData.specificBoxType,
+    quantity: formData.quantity as number || 0,
+    pricePerUnit: estimatedPrice,
+    width: formData.width as number,
+    height: formData.height as number,
+    depth: formData.depth as number,
+    material: formData.material || '',
+    materialDensity: formData.materialDensity as number,
+    printColorsOuter: formData.printColorsOuter,
+    printColorsInner: formData.printColorsInner,
+    printType: formData.printType,
+    finishes: Array.isArray(formData.finishes) ? formData.finishes : formData.finishes ? [formData.finishes] : undefined,
+    handleType: formData.handleType,
+    handleAttachment: formData.handleAttachment,
+    fittings: formData.fittings,
+    notes: formData.additionalInfo
+  };
+
+  return knowledgeBase.addOrder(orderData);
+}
+
+// Система мониторинга токенов
+interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cost: number;
+  timestamp: Date;
+}
+
+class TokenMonitor {
+  private usage: TokenUsage[] = [];
+  private monthlyLimit = 1000000; // 1M токенов в месяц
+  private costPer1KTokens = 0.02; // Примерная стоимость
+
+  addUsage(inputTokens: number, outputTokens: number): void {
+    const totalTokens = inputTokens + outputTokens;
+    const cost = (totalTokens / 1000) * this.costPer1KTokens;
+    
+    this.usage.push({
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      cost,
+      timestamp: new Date()
+    });
+
+    console.log(`Токены: ${inputTokens} входных, ${outputTokens} выходных, ${totalTokens} всего, стоимость: $${cost.toFixed(4)}`);
+    
+    this.checkLimits();
+  }
+
+  private checkLimits(): void {
+    const currentMonth = new Date().getMonth();
+    const monthlyUsage = this.usage
+      .filter(u => u.timestamp.getMonth() === currentMonth)
+      .reduce((sum, u) => sum + u.totalTokens, 0);
+
+    if (monthlyUsage > this.monthlyLimit * 0.8) {
+      console.warn(`⚠️ Приближение к месячному лимиту токенов: ${monthlyUsage}/${this.monthlyLimit}`);
+    }
+
+    const monthlyCost = this.usage
+      .filter(u => u.timestamp.getMonth() === currentMonth)
+      .reduce((sum, u) => sum + u.cost, 0);
+
+    if (monthlyCost > 50) { // Предупреждение при превышении $50
+      console.warn(`⚠️ Высокий месячный расход: $${monthlyCost.toFixed(2)}`);
+    }
+  }
+
+  getMonthlyStats(): { tokens: number; cost: number } {
+    const currentMonth = new Date().getMonth();
+    const monthlyUsage = this.usage.filter(u => u.timestamp.getMonth() === currentMonth);
+    
+    return {
+      tokens: monthlyUsage.reduce((sum, u) => sum + u.totalTokens, 0),
+      cost: monthlyUsage.reduce((sum, u) => sum + u.cost, 0)
+    };
+  }
+}
+
+const tokenMonitor = new TokenMonitor();
+
+// Конфигурация моделей для оптимизации стоимости
+const MODEL_CONFIG = {
+  // Дешевые модели для простых задач
+  extraction: "gemini-1.5-flash",        // ~$0.002/1K токенов
+  priceCorrection: "gemini-1.5-flash",   // ~$0.002/1K токенов
+  
+  // Дорогие модели для критически важных задач
+  costEstimation: "gemini-2.5-flash-preview-04-17", // ~$0.01-0.05/1K токенов
+};
+
+// Функция для получения статистики использования
+export function getTokenUsageStats() {
+  return tokenMonitor.getMonthlyStats();
 }

@@ -1,0 +1,26 @@
+name = "packaging-calculator-api"
+main = "workers/api-proxy.js"
+compatibility_date = "2024-01-01"
+
+# Переменные окружения (устанавливаются через Cloudflare Dashboard)
+[vars]
+CLIENT_API_KEY = "your-client-api-key-here"
+
+# KV namespace для rate limiting и мониторинга
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# Секретные переменные (устанавливаются через wrangler secret)
+# wrangler secret put GEMINI_API_KEY
+# wrangler secret put CLIENT_API_KEY
+
+# Настройки для production
+[env.production]
+name = "packaging-calculator-api"
+route = "api.yourdomain.com/*"
+
+# Настройки для preview
+[env.preview]
+name = "packaging-calculator-api-preview"
