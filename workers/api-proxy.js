@@ -65,6 +65,10 @@ export default {
         model: model,
         messages: [
           {
+            role: 'system',
+            content: 'Ты - AI-ассистент для расчета стоимости упаковки. Отвечай на русском языке. Всегда используй русский язык для общения.'
+          },
+          {
             role: 'user',
             content: requestBody.contents?.[0]?.parts?.[0]?.text || ''
           }
@@ -84,23 +88,53 @@ export default {
         body: JSON.stringify(openRouterBody),
       });
 
-      const response = await fetch(openRouterRequest);
-      const responseData = await response.json();
+             const response = await fetch(openRouterRequest);
+       
+       // Проверяем статус ответа
+       if (!response.ok) {
+         const errorData = await response.json().catch(() => ({}));
+         console.error('OpenRouter API error:', response.status, errorData);
+         
+         let errorMessage = 'Ошибка API';
+         if (response.status === 401) {
+           errorMessage = 'Ошибка авторизации OpenRouter. Проверьте API ключ и баланс аккаунта.';
+         } else if (response.status === 402) {
+           errorMessage = 'Недостаточно средств на OpenRouter. Пополните баланс аккаунта.';
+         } else if (response.status === 429) {
+           errorMessage = 'Превышен лимит запросов к OpenRouter. Попробуйте позже.';
+         }
+         
+         return new Response(JSON.stringify({
+           error: {
+             code: response.status,
+             message: errorMessage,
+             details: errorData
+           }
+         }), {
+           status: response.status,
+           headers: {
+             ...corsHeaders,
+             'Content-Type': 'application/json',
+           },
+         });
+       }
+       
+       const responseData = await response.json();
 
-      // Преобразуем OpenRouter ответ в Gemini формат
-      const geminiResponse = {
-        candidates: [{
-          content: {
-            parts: [{
-              text: responseData.choices?.[0]?.message?.content || ''
-            }]
-          }
-        }],
-        usage: {
-          promptTokenCount: responseData.usage?.prompt_tokens || 0,
-          candidatesTokenCount: responseData.usage?.completion_tokens || 0
-        }
-      };
+       // Преобразуем OpenRouter ответ в Gemini формат
+       const geminiResponse = {
+         candidates: [{
+           content: {
+             parts: [{
+               text: responseData.choices?.[0]?.message?.content || ''
+             }]
+           }
+         }],
+         usage: {
+           promptTokenCount: responseData.usage?.prompt_tokens || 0,
+           candidatesTokenCount: responseData.usage?.completion_tokens || 0
+         }
+       };
 
       // Логируем использование токенов
       if (responseData.usage) {
