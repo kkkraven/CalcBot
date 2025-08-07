@@ -7,6 +7,7 @@ import { QuickActions } from './components/QuickActions';
 import { LoadingState } from './components/LoadingState';
 import { ToastContainer, ToastType } from './components/Toast';
 import { CalculatorIcon } from './components/icons/CalculatorIcon';
+import MonitoringDashboard from './components/MonitoringDashboard';
 import type { FormData, PackagingCostResponse, ChatMessage, AppStep } from './types';
 import { ProductType }  from './types';
 import { 
@@ -19,6 +20,7 @@ import {
   getTokenUsageStats
 } from './services/geminiService';
 import { knowledgeBase } from './services/knowledgeBase';
+import { logger } from './services/monitoringService';
 
 const App: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
@@ -145,6 +147,11 @@ ${stats.recentOrders.slice(0, 3).map(order =>
   }, [appStep, formData, addMessage, translateKeyToRussian, setAppStep, setFormData, setLastCalculatedFormData]);
 
   const handleUserInput = async (userInput: string) => {
+    logger.info('User input received', undefined, { 
+      inputLength: userInput.length,
+      appStep 
+    });
+    
     addMessage(userInput, 'user');
     setError(null);
 
@@ -178,6 +185,11 @@ ${stats.recentOrders.slice(0, 3).map(order =>
           addToast('success', 'Успешно', `Извлечено ${parsedDataArray.length} вариантов заказа`);
         }
       } catch (e: any) {
+        logger.error('Error parsing user input', e, { 
+          userInput: userInput.substring(0, 100),
+          appStep 
+        });
+        
         setChatMessages(prev => prev.filter(m => !m.isLoading));
         let userErrorMessage = `Ошибка при разборе запроса. Попробуйте еще раз.`;
         const errorMessageString = String(e?.message || e || '').toLowerCase();
@@ -249,8 +261,16 @@ ${note}`;
                     try {
                         const orderId = saveOrderToKnowledgeBase(variant as FormData, estimatedCostPerUnit);
                         newOrderIds.push(orderId);
+                        logger.info('Order saved to knowledge base', undefined, { 
+                          orderId,
+                          variantIndex: i,
+                          productType: variant.productType 
+                        });
                     } catch (saveError) {
-                        console.error('Ошибка сохранения в базу знаний:', saveError);
+                        logger.error('Error saving order to knowledge base', saveError as Error, { 
+                          variantIndex: i,
+                          productType: variant.productType 
+                        });
                     }
                 }
                 
@@ -259,6 +279,12 @@ ${note}`;
                 results.push({success: true, text: resultPrefix + formattedResultText});
 
             } catch (e:any) {
+                logger.error('Error calculating cost for variant', e, { 
+                  variantIndex: i,
+                  productType: variant.productType,
+                  quantity: variant.quantity 
+                });
+                
                 setChatMessages(prev => prev.filter(m => m.text !== variantLoadingMessage));
                 const errorPrefix = formData.length > 1 ? `Ошибка для Варианта ${i + 1} (Тираж: ${variant.quantity}):\n` : '';
                 let calcErrorMessage = `Ошибка при расчете. Попробуйте еще раз.`;
@@ -468,6 +494,9 @@ ${note}`;
 
       {/* Toast Container */}
       <ToastContainer toasts={toasts} onClose={removeToast} />
+      
+      {/* Monitoring Dashboard */}
+      <MonitoringDashboard />
     </div>
   );
 };

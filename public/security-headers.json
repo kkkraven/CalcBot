@@ -1,0 +1,183 @@
+{
+  "security_headers": {
+    "Content-Security-Policy": {
+      "description": "Content Security Policy для защиты от XSS атак",
+      "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests;",
+      "production_value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests;"
+    },
+    "X-Content-Type-Options": {
+      "description": "Предотвращает MIME type sniffing",
+      "value": "nosniff"
+    },
+    "X-Frame-Options": {
+      "description": "Защита от clickjacking атак",
+      "value": "DENY"
+    },
+    "X-XSS-Protection": {
+      "description": "Включает XSS защиту браузера",
+      "value": "1; mode=block"
+    },
+    "Referrer-Policy": {
+      "description": "Контролирует передачу referrer информации",
+      "value": "strict-origin-when-cross-origin"
+    },
+    "Permissions-Policy": {
+      "description": "Контролирует доступ к API браузера",
+      "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+    },
+    "Strict-Transport-Security": {
+      "description": "Принудительное использование HTTPS",
+      "value": "max-age=31536000; includeSubDomains; preload"
+    },
+    "Cache-Control": {
+      "description": "Контроль кэширования",
+      "value": "no-cache, no-store, must-revalidate"
+    },
+    "Pragma": {
+      "description": "HTTP/1.0 совместимость для кэширования",
+      "value": "no-cache"
+    },
+    "Expires": {
+      "description": "Время истечения кэша",
+      "value": "0"
+    }
+  },
+  "cors_settings": {
+    "description": "Настройки CORS для API",
+    "allowed_origins": [
+      "https://yourdomain.com",
+      "https://www.yourdomain.com",
+      "http://localhost:3000",
+      "http://localhost:5173"
+    ],
+    "allowed_methods": ["GET", "POST", "OPTIONS"],
+    "allowed_headers": [
+      "Content-Type",
+      "Authorization",
+      "X-API-Key",
+      "X-Requested-With"
+    ],
+    "exposed_headers": [
+      "X-Rate-Limit-Remaining",
+      "X-Rate-Limit-Reset"
+    ],
+    "max_age": 86400,
+    "credentials": false
+  },
+  "rate_limiting": {
+    "description": "Настройки ограничения запросов",
+    "window_ms": 60000,
+    "max_requests_per_window": 100,
+    "skip_successful_requests": false,
+    "skip_failed_requests": false,
+    "headers": {
+      "X-Rate-Limit-Limit": "X-Rate-Limit-Limit",
+      "X-Rate-Limit-Remaining": "X-Rate-Limit-Remaining",
+      "X-Rate-Limit-Reset": "X-Rate-Limit-Reset"
+    }
+  },
+  "helmet_config": {
+    "description": "Конфигурация Helmet для Express.js",
+    "contentSecurityPolicy": {
+      "useDefaults": true,
+      "directives": {
+        "default-src": ["'self'"],
+        "script-src": ["'self'", "'unsafe-inline'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "https:"],
+        "connect-src": ["'self'", "https:"],
+        "font-src": ["'self'"],
+        "object-src": ["'none'"],
+        "media-src": ["'self'"],
+        "frame-src": ["'none'"]
+      }
+    },
+    "crossOriginEmbedderPolicy": false,
+    "crossOriginOpenerPolicy": {
+      "policy": "same-origin"
+    },
+    "crossOriginResourcePolicy": {
+      "policy": "cross-origin"
+    },
+    "dnsPrefetchControl": {
+      "allow": false
+    },
+    "frameguard": {
+      "action": "deny"
+    },
+    "hidePoweredBy": true,
+    "hsts": {
+      "maxAge": 31536000,
+      "includeSubDomains": true,
+      "preload": true
+    },
+    "ieNoOpen": true,
+    "noSniff": true,
+    "originAgentCluster": true,
+    "permittedCrossDomainPolicies": {
+      "permittedPolicies": "none"
+    },
+    "referrerPolicy": {
+      "policy": "strict-origin-when-cross-origin"
+    },
+    "xssFilter": true
+  },
+  "nginx_config": {
+    "description": "Пример конфигурации Nginx с заголовками безопасности",
+    "server_block": {
+      "add_header": [
+        "Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-src 'none'; object-src 'none';\"",
+        "X-Content-Type-Options nosniff",
+        "X-Frame-Options DENY",
+        "X-XSS-Protection \"1; mode=block\"",
+        "Referrer-Policy strict-origin-when-cross-origin",
+        "Permissions-Policy \"camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()\"",
+        "Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\" always"
+      ]
+    }
+  },
+  "apache_config": {
+    "description": "Пример конфигурации Apache с заголовками безопасности",
+    "htaccess": {
+      "Header": [
+        "always set Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-src 'none'; object-src 'none';\"",
+        "always set X-Content-Type-Options nosniff",
+        "always set X-Frame-Options DENY",
+        "always set X-XSS-Protection \"1; mode=block\"",
+        "always set Referrer-Policy strict-origin-when-cross-origin",
+        "always set Permissions-Policy \"camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()\"",
+        "always set Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\""
+      ]
+    }
+  },
+  "cloudflare_workers": {
+    "description": "Пример конфигурации для Cloudflare Workers",
+    "headers": {
+      "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-src 'none'; object-src 'none';",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "X-XSS-Protection": "1; mode=block",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+    }
+  },
+  "deployment_checklist": {
+    "description": "Чек-лист безопасности для развертывания",
+    "items": [
+      "Настроены все заголовки безопасности",
+      "Включен HTTPS",
+      "Настроен CSP",
+      "Включена защита от XSS",
+      "Настроен rate limiting",
+      "Валидация всех входных данных",
+      "Санитизация выходных данных",
+      "Логирование безопасности",
+      "Мониторинг аномалий",
+      "Регулярные обновления зависимостей",
+      "Сканирование уязвимостей",
+      "Резервное копирование данных",
+      "План реагирования на инциденты"
+    ]
+  }
+}

@@ -3,8 +3,8 @@ main = "workers/api-proxy.js"
 compatibility_date = "2024-01-01"
 
 # Переменные окружения (устанавливаются через Cloudflare Dashboard)
-[vars]
-CLIENT_API_KEY = "384e8b655b4c9bc468a411b65ce5151291a1d720823c7445af8572e7d009372b"
+# CLIENT_API_KEY теперь устанавливается как секрет через wrangler secret
+# wrangler secret put CLIENT_API_KEY
 
 # KV namespace для rate limiting и мониторинга
 [[kv_namespaces]]

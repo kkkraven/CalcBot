@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест API Калькулятора Упаковки</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест API Калькулятора Упаковки</h1>
+        
+        <div class="test-section">
+            <h3>🔗 Информация о развертывании</h3>
+            <p><strong>API URL:</strong> <code>https://packaging-calculator-api.46261vor.workers.dev</code></p>
+            <p><strong>Frontend URL:</strong> <code>https://bc96ad1c.packaging-calculator.pages.dev</code></p>
+            <p><strong>Статус:</strong> <span id="api-status">Проверяется...</span></p>
+            <button onclick="checkApiStatus()">Проверить статус API</button>
+        </div>
+
+        <div class="test-section">
+            <h3>💬 Простой тест чата</h3>
+            <textarea id="chat-input" placeholder="Введите сообщение для тестирования...">Привет! Как дела?</textarea>
+            <button onclick="testChat()">Отправить сообщение</button>
+            <div id="chat-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📦 Тест извлечения параметров заказа</h3>
+            <textarea id="order-input" placeholder="Опишите заказ на упаковку...">Нужно 1000 коробок из картона, размеры 200x150x100 мм, печать в 4 цвета снаружи, без отделки</textarea>
+            <button onclick="testOrderExtraction()">Извлечь параметры</button>
+            <div id="order-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>💰 Тест расчета стоимости</h3>
+            <textarea id="cost-input" placeholder="Введите параметры для расчета стоимости в JSON формате...">{"productType":"BOX","material":"CARDBOARD","width":200,"height":150,"depth":100,"quantity":1000,"printColorsOuter":"4_COLORS","printType":"OFFSET"}</textarea>
+            <button onclick="testCostCalculation()">Рассчитать стоимость</button>
+            <div id="cost-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Статистика использования</h3>
+            <button onclick="getUsageStats()">Получить статистику</button>
+            <div id="stats-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://packaging-calculator-api.46261vor.workers.dev';
+        const CLIENT_API_KEY = '384e8b655b4c9bc468a411b65ce5151291a1d720823c7445af8572e7d009372b';
+
+        async function makeApiRequest(endpoint, body = null) {
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': CLIENT_API_KEY
+                    },
+                    body: body ? JSON.stringify(body) : null
+                });
+
+                const data = await response.json();
+                return { success: response.ok, data, status: response.status };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        function showResult(elementId, result, isError = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = JSON.stringify(result, null, 2);
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+
+        async function checkApiStatus() {
+            const statusElement = document.getElementById('api-status');
+            statusElement.textContent = 'Проверяется...';
+            
+            const result = await makeApiRequest('/v1beta/models/gemini:generateContent', {
+                contents: [{
+                    parts: [{ text: 'Тест соединения' }]
+                }]
+            });
+
+            if (result.success) {
+                statusElement.textContent = '✅ API работает';
+                statusElement.style.color = 'green';
+            } else {
+                statusElement.textContent = '❌ API недоступен';
+                statusElement.style.color = 'red';
+            }
+        }
+
+        async function testChat() {
+            const input = document.getElementById('chat-input').value;
+            const result = await makeApiRequest('/v1beta/models/gemini:generateContent', {
+                contents: [{
+                    parts: [{ text: input }]
+                }]
+            });
+
+            showResult('chat-result', result, !result.success);
+        }
+
+        async function testOrderExtraction() {
+            const input = document.getElementById('order-input').value;
+            const result = await makeApiRequest('/v1beta/models/gemini:generateContent', {
+                contents: [{
+                    parts: [{ text: `Извлеки параметры из следующего заказа и верни в JSON формате: ${input}` }]
+                }],
+                generationConfig: {
+                    responseMimeType: 'application/json'
+                }
+            });
+
+            showResult('order-result', result, !result.success);
+        }
+
+        async function testCostCalculation() {
+            const input = document.getElementById('cost-input').value;
+            let formData;
+            
+            try {
+                formData = JSON.parse(input);
+            } catch (error) {
+                showResult('cost-result', { error: 'Неверный JSON формат' }, true);
+                return;
+            }
+
+            const result = await makeApiRequest('/v1beta/models/gemini:generateContent', {
+                contents: [{
+                    parts: [{ text: `Рассчитай стоимость упаковки для следующих параметров: ${JSON.stringify(formData)}` }]
+                }]
+            });
+
+            showResult('cost-result', result, !result.success);
+        }
+
+        async function getUsageStats() {
+            // Этот endpoint нужно будет реализовать в API
+            const result = await makeApiRequest('/stats', {
+                contents: [{
+                    parts: [{ text: 'Покажи статистику использования токенов' }]
+                }]
+            });
+
+            showResult('stats-result', result, !result.success);
+        }
+
+        // Проверяем статус API при загрузке страницы
+        window.onload = function() {
+            checkApiStatus();
+        };
+    </script>
+</body>
+</html>
