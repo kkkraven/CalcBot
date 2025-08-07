@@ -7,10 +7,10 @@ import { knowledgeBase } from './knowledgeBase';
 // Конфигурация для защищенного API
 const API_CONFIG = {
   // URL вашего Cloudflare Worker
-  baseUrl: process.env.REACT_APP_API_BASE_URL || 'https://packaging-calculator-api.your-subdomain.workers.dev',
+  baseUrl: import.meta.env.VITE_API_BASE_URL || 'https://packaging-calculator-api.46261vor.workers.dev',
   
   // API ключ клиента (публичный, но ограниченный)
-  clientApiKey: process.env.REACT_APP_CLIENT_API_KEY || 'your-client-api-key',
+  clientApiKey: import.meta.env.VITE_CLIENT_API_KEY || '384e8b655b4c9bc468a411b65ce5151291a1d720823c7445af8572e7d009372b',
   
   // Настройки rate limiting
   maxRequestsPerMinute: 100,
